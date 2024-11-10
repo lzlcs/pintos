@@ -20,6 +20,7 @@
    of thread.h for details. */
 #define THREAD_MAGIC 0xcd6abf4b
 
+static struct list wait_list;
 /** List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
 static struct list ready_list;
@@ -91,6 +92,7 @@ thread_init (void)
 
   lock_init (&tid_lock);
   list_init (&ready_list);
+  list_init (&wait_list);
   list_init (&all_list);
 
   /* Set up a thread structure for the running thread. */
@@ -109,7 +111,6 @@ thread_start (void)
   struct semaphore idle_started;
   sema_init (&idle_started, 0);
   thread_create ("idle", PRI_MIN, idle, &idle_started);
-
   /* Start preemptive thread scheduling. */
   intr_enable ();
 
@@ -137,6 +138,7 @@ thread_tick (void)
   /* Enforce preemption. */
   if (++thread_ticks >= TIME_SLICE)
     intr_yield_on_return ();
+  thread_unwait();
 }
 
 /** Prints thread statistics. */
@@ -220,6 +222,29 @@ thread_block (void)
   schedule ();
 }
 
+void
+thread_unwait(void)
+{  
+  
+  struct list_elem *e;
+
+  ASSERT (intr_get_level () == INTR_OFF);
+
+  for (e = list_begin (&wait_list); e != list_end (&wait_list);
+       e = list_next (e))
+    {
+      struct thread *t = list_entry (e, struct thread, waitelem);
+
+      t->wait_ticks -= 1;
+      if (t->wait_ticks == 0)
+      {
+        list_remove(e);
+        thread_unblock(t);
+      }
+    }
+}
+
+
 /** Transitions a blocked thread T to the ready-to-run state.
    This is an error if T is not blocked.  (Use thread_yield() to
    make the running thread ready.)
@@ -240,6 +265,21 @@ thread_unblock (struct thread *t)
   list_push_back (&ready_list, &t->elem);
   t->status = THREAD_READY;
   intr_set_level (old_level);
+}
+
+
+void thread_wait(int64_t ticks) 
+{
+
+  ASSERT(intr_get_level() == INTR_ON);
+  enum intr_level old_level = intr_disable();
+
+  struct thread* t = thread_current();
+  t->wait_ticks = ticks;
+  list_push_back(&wait_list, &t->waitelem);
+  thread_block();
+  
+  intr_set_level(old_level);
 }
 
 /** Returns the name of the running thread. */
@@ -463,6 +503,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
+  t->wait_ticks = 0;
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
