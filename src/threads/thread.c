@@ -71,7 +71,11 @@ static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
-bool thread_less_priority (const struct list_elem *a,
+bool thread_more_priority (const struct list_elem *a,
+                            const struct list_elem *b,
+                            void *aux);
+
+bool thread_less_wake_tick(const struct list_elem *a,
                             const struct list_elem *b,
                             void *aux);
 
@@ -230,20 +234,17 @@ thread_unwait(void)
 {  
   
   struct list_elem *e;
-
   ASSERT (intr_get_level () == INTR_OFF);
+  int64_t cur_tick = timer_ticks();
 
   for (e = list_begin (&wait_list); e != list_end (&wait_list);
        e = list_next (e))
     {
       struct thread *t = list_entry (e, struct thread, waitelem);
-
-      t->wait_ticks -= 1;
-      if (t->wait_ticks == 0)
-      {
-        list_remove(e);
-        thread_unblock(t);
-      }
+      if (t->wake_tick > cur_tick) break;
+      // printf("wake: %s %d\n", t->name, t->wake_tick);
+      list_remove(e);
+      thread_unblock(t);
     }
 }
 
@@ -265,22 +266,24 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  list_insert_ordered(&ready_list, &t->elem, thread_less_priority, NULL);
+  list_insert_ordered(&ready_list, &t->elem, thread_more_priority, NULL);
   // list_push_back (&ready_list, &t->elem);
   t->status = THREAD_READY;
   intr_set_level (old_level);
 }
 
 
-void thread_wait(int64_t ticks) 
+void thread_wait(int64_t wait_ticks) 
 {
 
   ASSERT(intr_get_level() == INTR_ON);
   enum intr_level old_level = intr_disable();
-
+  int64_t cur_tick = timer_ticks();
   struct thread* t = thread_current();
-  t->wait_ticks = ticks;
-  list_push_back(&wait_list, &t->waitelem);
+  t->wake_tick = wait_ticks + cur_tick;
+  // printf("wake_tick: %d\n", t->wake_tick);
+
+  list_insert_ordered(&wait_list, &t->waitelem, thread_less_wake_tick, NULL);
   thread_block();
   
   intr_set_level(old_level);
@@ -352,8 +355,9 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread) 
-    list_insert_ordered(&ready_list, &cur->elem, thread_less_priority, NULL);
+    list_insert_ordered(&ready_list, &cur->elem, thread_more_priority, NULL);
     // list_push_back (&ready_list, &cur->elem);
+  // ASSERT(false);
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -508,11 +512,11 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
-  t->wait_ticks = 0;
+  t->wake_tick = -1;
 
   old_level = intr_disable ();
   
-  list_insert_ordered(&all_list, &t->allelem, thread_less_priority, NULL);
+  list_insert_ordered(&all_list, &t->allelem, thread_more_priority, NULL);
   // list_push_back (&all_list, &t->allelem);
   intr_set_level (old_level);
 }
@@ -631,11 +635,20 @@ allocate_tid (void)
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
-bool thread_less_priority (const struct list_elem *a,
+bool thread_more_priority (const struct list_elem *a,
                             const struct list_elem *b,
                             void *aux) 
 {
   int x = list_entry(a, struct thread, elem)->priority;
   int y = list_entry(b, struct thread, elem)->priority;
   return x > y;
+}
+
+bool thread_less_wake_tick(const struct list_elem *a,
+                            const struct list_elem *b,
+                            void *aux) 
+{
+  int64_t x = list_entry(a, struct thread, waitelem)->wake_tick;
+  int64_t y = list_entry(b, struct thread, waitelem)->wake_tick;
+  return x < y;
 }
