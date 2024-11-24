@@ -143,9 +143,9 @@ thread_tick (void)
     kernel_ticks++;
 
   /* Enforce preemption. */
-  if (++thread_ticks >= TIME_SLICE)
+  bool yield_flag = thread_unwait();
+  if (++thread_ticks >= TIME_SLICE || yield_flag)
     intr_yield_on_return ();
-  thread_unwait();
 }
 
 /** Prints thread statistics. */
@@ -209,6 +209,7 @@ thread_create (const char *name, int priority,
 
   /* Add to run queue. */
   thread_unblock (t);
+  thread_yield();
 
   return tid;
 }
@@ -229,23 +230,27 @@ thread_block (void)
   schedule ();
 }
 
-void
-thread_unwait(void)
+bool thread_unwait()
 {  
   
   struct list_elem *e;
   ASSERT (intr_get_level () == INTR_OFF);
   int64_t cur_tick = timer_ticks();
 
+  bool yield_flag = false;
+
   for (e = list_begin (&wait_list); e != list_end (&wait_list);
        e = list_next (e))
     {
       struct thread *t = list_entry (e, struct thread, waitelem);
       if (t->wake_tick > cur_tick) break;
-      // printf("wake: %s %d\n", t->name, t->wake_tick);
+
+      yield_flag = true;
       list_remove(e);
       thread_unblock(t);
     }
+
+  return yield_flag;
 }
 
 
@@ -385,6 +390,7 @@ void
 thread_set_priority (int new_priority) 
 {
   thread_current ()->priority = new_priority;
+  thread_yield();
 }
 
 /** Returns the current thread's priority. */

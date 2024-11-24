@@ -41,6 +41,7 @@ static const struct test tests[] =
 
     
     {"helloworld", test_hello_world},
+    {"priority-alarm", test_priority_alarm},
   };
 
 static const char *test_name;
