@@ -28,21 +28,56 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
 tid_t
 process_execute (const char *file_name) 
 {
-  char *fn_copy;
+  char *fn_copy, *name_copy;
   tid_t tid;
 
-  /* Make a copy of FILE_NAME.
-     Otherwise there's a race between the caller and load(). */
-  fn_copy = palloc_get_page (0);
-  if (fn_copy == NULL)
+  fn_copy = palloc_get_page(0);
+  name_copy = palloc_get_page(0);
+  if (fn_copy == NULL || name_copy == NULL) 
     return TID_ERROR;
-  strlcpy (fn_copy, file_name, PGSIZE);
 
-  /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  strlcpy (fn_copy, file_name, PGSIZE);
+  strlcpy (name_copy, file_name, PGSIZE);
+
+  char *save_ptr;
+  name_copy = strtok_r(name_copy, " ", &save_ptr);  
+
+  tid = thread_create (name_copy, PRI_DEFAULT, start_process, fn_copy);
+
+  palloc_free_page(name_copy);
+
+
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
+
   return tid;
+}
+
+void push_argument(void **esp, char *cmd)
+{
+  int argc = 0, argv[64];
+  char *token, *save_ptr; 
+
+  (*esp) = PHYS_BASE;
+
+  for (token = strtok_r(cmd, " ", &save_ptr); token != NULL;
+       token = strtok_r(NULL, " ", &save_ptr))
+  {
+    size_t len = strlen(token);
+    (*esp) -= (len + 1);
+    memcpy((*esp), token, len + 1);
+    argv[argc++] = (*esp);
+  }
+
+  (*esp) = (int)(*esp) & 0xfffffffc;  // word_align
+  (*esp) -= 4, (*(int *)(*esp)) = 0;  // argv[argc]
+
+  for (int i = argc - 1; i >= 0; i--) // argv[i];
+    (*esp) -= 4, (*(int *)(*esp)) = argv[i];
+
+  (*esp) -= 4, (*(int*)(*esp)) = (*esp) + 4; // argv
+  (*esp) -= 4, (*(int*)(*esp)) = argc;       // argc
+  (*esp) -= 4, (*(int*)(*esp)) = 0;          // return address
 }
 
 /** A thread function that loads a user process and starts it
@@ -59,12 +94,24 @@ start_process (void *file_name_)
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  success = load (file_name, &if_.eip, &if_.esp);
 
-  /* If load failed, quit. */
-  palloc_free_page (file_name);
-  if (!success) 
+  char *cmd = palloc_get_page(0);
+  strlcpy(cmd, file_name_, PGSIZE);
+
+  char *save_ptr;
+  file_name = strtok_r(file_name, " ", &save_ptr);
+  success = load (file_name, &if_.eip, &if_.esp);
+  palloc_free_page(file_name);
+
+  if (!success)
+  {
+    palloc_free_page(cmd);
     thread_exit ();
+  }
+
+  push_argument(&if_.esp, cmd);
+  hex_dump((uintptr_t)if_.esp, if_.esp, (PHYS_BASE) - if_.esp, true);
+  palloc_free_page(cmd);
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
