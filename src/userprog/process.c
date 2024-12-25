@@ -106,11 +106,11 @@ start_process (void *file_name_)
   if (!success)
   {
     palloc_free_page(cmd);
-    thread_exit ();
+    error_exit();
   }
 
   push_argument(&if_.esp, cmd);
-  hex_dump((uintptr_t)if_.esp, if_.esp, (PHYS_BASE) - if_.esp, true);
+  // hex_dump((uintptr_t)if_.esp, if_.esp, (PHYS_BASE) - if_.esp, true);
   palloc_free_page(cmd);
 
   /* Start the user process by simulating a return from an
@@ -135,7 +135,27 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  return -1;
+  struct thread *cur = thread_current ();
+
+  struct list* l = &cur->child_list;
+  struct list_elem* e = NULL;
+  struct exit_info *child;
+  for (e = list_begin(l); e != list_end(l); e = list_next(e))
+  {
+    child = list_entry(e, struct exit_info, child_elem);
+    if (child->tid == child_tid) break;
+  }
+
+  if (e == list_end(l)) return -1;
+  list_remove(e);
+
+  if (child->is_still_alive)
+  {
+    child->is_being_waited = true;
+    sema_down(&child->linked_thread->sema_wait);
+  }
+
+  return child->exit_code;
 }
 
 /** Free the current process's resources. */
@@ -145,22 +165,35 @@ process_exit (void)
   struct thread *cur = thread_current ();
   uint32_t *pd;
 
-  /* Destroy the current process's page directory and switch back
-     to the kernel-only page directory. */
+  struct list* l = &cur->child_list;
+  struct list_elem* e;
+  for (e = list_begin(l); e != list_end(l); e = list_next(e))
+  {
+    struct exit_info *tmp = list_entry(e, struct exit_info, child_elem);
+    if (tmp->is_still_alive)
+      tmp->linked_thread->linked_exit->parent = NULL;
+  }
+
+  if (cur->linked_exit->parent == NULL) free(cur->linked_exit);
+  else 
+  {
+    cur->linked_exit->exit_code = cur->exit_code;
+    if (cur->linked_exit->is_being_waited)
+      sema_up(&cur->sema_wait);
+
+    cur->linked_exit->is_still_alive = false;
+    cur->linked_exit->linked_thread = NULL;
+  }
+
   pd = cur->pagedir;
   if (pd != NULL) 
     {
-      /* Correct ordering here is crucial.  We must set
-         cur->pagedir to NULL before switching page directories,
-         so that a timer interrupt can't switch back to the
-         process page directory.  We must activate the base page
-         directory before destroying the process's page
-         directory, or our active page directory will be one
-         that's been freed (and cleared). */
       cur->pagedir = NULL;
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
+
+  printf("%s: exit(%d)\n", cur->name, cur->linked_exit->exit_code);
 }
 
 /** Sets up the CPU for running user code in the current

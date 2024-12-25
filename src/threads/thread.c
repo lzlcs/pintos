@@ -191,6 +191,16 @@ thread_create (const char *name, int priority,
   /* Initialize thread. */
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
+  
+  t->linked_exit = malloc(sizeof(struct exit_info));
+  t->linked_exit->parent = thread_current();
+  t->linked_exit->tid = tid;
+  t->linked_exit->linked_thread = t;
+  t->linked_exit->exit_code = 0;
+  t->linked_exit->tid = tid;
+  t->linked_exit->is_still_alive = true;
+  t->linked_exit->is_being_waited = false;
+  list_push_back(&t->linked_exit->parent->child_list, &t->linked_exit->child_elem);
 
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
@@ -327,6 +337,12 @@ thread_tid (void)
   return thread_current ()->tid;
 }
 
+
+void error_exit()
+{
+  thread_current()->exit_code = -1;
+  thread_exit();
+}
 /** Deschedules the current thread and destroys it.  Never
    returns to the caller. */
 void
@@ -519,6 +535,10 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->magic = THREAD_MAGIC;
   t->wake_tick = -1;
+
+  t->exit_code = 0;
+  list_init(&t->child_list);
+  sema_init(&t->sema_wait, 0);
 
   old_level = intr_disable ();
   
