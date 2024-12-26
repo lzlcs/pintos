@@ -205,6 +205,16 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
+  
+  while (!list_empty(&cur->file_list))
+  {
+    e = list_pop_front(&cur->file_list);
+    struct file_info* tmp = list_entry(e, struct file_info, elem);
+    lock_acquire(&filesys_lock);
+    file_close(tmp->f);
+    lock_release(&filesys_lock);
+    free(tmp);
+  }
 
   printf("%s: exit(%d)\n", cur->name, cur->linked_exit->exit_code);
 }

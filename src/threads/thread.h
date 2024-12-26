@@ -107,6 +107,9 @@ struct thread
     struct semaphore sema_exec;
     bool exec_success;
 
+    struct list file_list;
+    uint32_t file_index;
+
 #endif
 
     /* Owned by thread.c. */
@@ -124,6 +127,13 @@ struct exit_info
     bool is_being_waited;
 
     struct list_elem child_elem;
+};
+
+struct file_info
+{
+   int fd;
+   struct file* f;
+   struct list_elem elem;
 };
 
 

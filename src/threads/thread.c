@@ -99,7 +99,7 @@ thread_init (void)
 
   lock_init (&tid_lock);
   lock_init (&filesys_lock);
-  
+
   list_init (&ready_list);
   list_init (&wait_list);
   list_init (&all_list);
@@ -539,9 +539,11 @@ init_thread (struct thread *t, const char *name, int priority)
   t->wake_tick = -1;
 
   list_init(&t->child_list);
+  list_init(&t->file_list);
   sema_init(&t->sema_wait, 0);
   sema_init(&t->sema_exec, 0);
   t->exec_success = false;
+  t->file_index = 2;
 
   old_level = intr_disable ();
   
