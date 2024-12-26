@@ -101,42 +101,37 @@ start_process (void *file_name_)
   struct thread *cur = thread_current();
 
   char *cmd = palloc_get_page(0);
-  if (cmd == NULL) 
+  if (cmd != NULL)
   {
-    palloc_free_page(file_name);
-    cur->linked_exit->parent->exec_success = false;
-    sema_up(&cur->linked_exit->parent->sema_exec);
-    error_exit();
-  }
+    strlcpy(cmd, file_name_, PGSIZE);
 
-  strlcpy(cmd, file_name_, PGSIZE);
+    char *save_ptr;
+    file_name = strtok_r(file_name, " ", &save_ptr);
+    success = load (file_name, &if_.eip, &if_.esp);
 
-  char *save_ptr;
-  file_name = strtok_r(file_name, " ", &save_ptr);
-  success = load (file_name, &if_.eip, &if_.esp);
-  
-  if (!success)
-  {
-    palloc_free_page(file_name);
+    if (success)
+    {
+      push_argument(&if_.esp, cmd);
+      palloc_free_page(cmd);
+      palloc_free_page(file_name);
+      cur->linked_exit->parent->exec_success = true;
+      sema_up(&cur->linked_exit->parent->sema_exec);
+      /* Start the user process by simulating a return from an
+      interrupt, implemented by intr_exit (in
+      threads/intr-stubs.S).  Because intr_exit takes all of its
+      arguments on the stack in the form of a `struct intr_frame',
+      we just point the stack pointer (%esp) to our stack frame
+      and jump to it. */
+      asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
+      NOT_REACHED ();
+    }
     palloc_free_page(cmd);
-    cur->linked_exit->parent->exec_success = false;
-    sema_up(&cur->linked_exit->parent->sema_exec);
-    error_exit();
   }
 
-  push_argument(&if_.esp, cmd);
   palloc_free_page(file_name);
-  palloc_free_page(cmd);
-  cur->linked_exit->parent->exec_success = true;
+  cur->linked_exit->parent->exec_success = false;
   sema_up(&cur->linked_exit->parent->sema_exec);
-  /* Start the user process by simulating a return from an
-     interrupt, implemented by intr_exit (in
-     threads/intr-stubs.S).  Because intr_exit takes all of its
-     arguments on the stack in the form of a `struct intr_frame',
-     we just point the stack pointer (%esp) to our stack frame
-     and jump to it. */
-  asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
-  NOT_REACHED ();
+  error_exit();  
 }
 
 /** Waits for thread TID to die and returns its exit status.  If
