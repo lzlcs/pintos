@@ -177,7 +177,6 @@ process_exit (void)
   if (cur->linked_exit->parent == NULL) free(cur->linked_exit);
   else 
   {
-    cur->linked_exit->exit_code = cur->exit_code;
     if (cur->linked_exit->is_being_waited)
       sema_up(&cur->sema_wait);
 
