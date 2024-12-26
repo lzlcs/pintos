@@ -43,8 +43,10 @@ void syscall_exit(struct intr_frame *f)
 
 void syscall_exec(struct intr_frame *f)
 {
+  char *cmd = *(char **)check_ptr(f->esp + 4, 4);
+  check_str(cmd);
+  f->eax = process_execute(cmd);
 }
-
 void syscall_wait(struct intr_frame *f)
 {
   int pid = *(int *)check_ptr(f->esp + 4, 4);

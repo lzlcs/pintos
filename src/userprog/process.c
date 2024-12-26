@@ -46,9 +46,12 @@ process_execute (const char *file_name)
 
   palloc_free_page(name_copy);
 
-
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
+
+  struct thread* cur = thread_current();
+  sema_down(&cur->sema_exec);
+  if (!cur->exec_success) return TID_ERROR;
 
   return tid;
 }
@@ -95,24 +98,37 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
 
+  struct thread *cur = thread_current();
+
   char *cmd = palloc_get_page(0);
+  if (cmd == NULL) 
+  {
+    palloc_free_page(file_name);
+    cur->linked_exit->parent->exec_success = false;
+    sema_up(&cur->linked_exit->parent->sema_exec);
+    error_exit();
+  }
+
   strlcpy(cmd, file_name_, PGSIZE);
 
   char *save_ptr;
   file_name = strtok_r(file_name, " ", &save_ptr);
   success = load (file_name, &if_.eip, &if_.esp);
-  palloc_free_page(file_name);
-
+  
   if (!success)
   {
+    palloc_free_page(file_name);
     palloc_free_page(cmd);
+    cur->linked_exit->parent->exec_success = false;
+    sema_up(&cur->linked_exit->parent->sema_exec);
     error_exit();
   }
 
   push_argument(&if_.esp, cmd);
-  // hex_dump((uintptr_t)if_.esp, if_.esp, (PHYS_BASE) - if_.esp, true);
+  palloc_free_page(file_name);
   palloc_free_page(cmd);
-
+  cur->linked_exit->parent->exec_success = true;
+  sema_up(&cur->linked_exit->parent->sema_exec);
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its

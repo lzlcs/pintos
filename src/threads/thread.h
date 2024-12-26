@@ -104,6 +104,8 @@ struct thread
     struct list child_list;
     struct exit_info *linked_exit;
     struct semaphore sema_wait;
+    struct semaphore sema_exec;
+    bool exec_success;
 
 #endif
 
