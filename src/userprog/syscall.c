@@ -55,11 +55,29 @@ void syscall_wait(struct intr_frame *f)
 
 void syscall_create(struct intr_frame *f)
 {
+  char *file_name = *(char **)check_ptr(f->esp + 4, 4);
+  check_str(file_name);
+  int file_size = *(int *)check_ptr(f->esp + 8, 4);
+
+  lock_acquire(&filesys_lock);
+  f->eax = filesys_create(file_name, file_size);
+  lock_release(&filesys_lock);
 }
+
 void syscall_remove(struct intr_frame *f)
+{  
+  char *file_name = *(char **)check_ptr(f->esp + 4, 4);
+  check_str(file_name);
+
+  lock_acquire(&filesys_lock);
+  f->eax = filesys_remove(file_name);
+  lock_release(&filesys_lock);
+}
+
+void syscall_open(struct intr_frame *f)
 {
 }
-void syscall_open(struct intr_frame *f)
+void syscall_close(struct intr_frame *f)
 {
 }
 void syscall_filesize(struct intr_frame *f)
@@ -89,9 +107,6 @@ void syscall_seek(struct intr_frame *f)
 {
 }
 void syscall_tell(struct intr_frame *f)
-{
-}
-void syscall_close(struct intr_frame *f)
 {
 }
 

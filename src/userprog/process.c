@@ -107,7 +107,10 @@ start_process (void *file_name_)
 
     char *save_ptr;
     file_name = strtok_r(file_name, " ", &save_ptr);
+    
+    // lock_acquire(&filesys_lock);
     success = load (file_name, &if_.eip, &if_.esp);
+    // lock_release(&filesys_lock);
 
     if (success)
     {

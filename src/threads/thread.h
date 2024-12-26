@@ -113,6 +113,7 @@ struct thread
     unsigned magic;                     /**< Detects stack overflow. */
   };
 
+struct lock filesys_lock;
 struct exit_info
 {
     tid_t tid;
