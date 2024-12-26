@@ -545,6 +545,8 @@ init_thread (struct thread *t, const char *name, int priority)
   t->exec_success = false;
   t->file_index = 2;
 
+  t->exec_file = NULL;
+
   old_level = intr_disable ();
   
   list_insert_ordered(&all_list, &t->allelem, thread_more_priority, NULL);

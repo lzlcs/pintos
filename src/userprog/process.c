@@ -108,9 +108,15 @@ start_process (void *file_name_)
     char *save_ptr;
     file_name = strtok_r(file_name, " ", &save_ptr);
     
-    // lock_acquire(&filesys_lock);
+    lock_acquire(&filesys_lock);
     success = load (file_name, &if_.eip, &if_.esp);
-    // lock_release(&filesys_lock);
+    if (success)
+    {
+      struct file *f = filesys_open(file_name);
+      cur->exec_file = f;
+      file_deny_write(f);
+    }
+    lock_release(&filesys_lock);
 
     if (success)
     {
@@ -214,6 +220,14 @@ process_exit (void)
     file_close(tmp->f);
     lock_release(&filesys_lock);
     free(tmp);
+  }
+
+  if (cur->exec_file != NULL)
+  {
+    lock_acquire(&filesys_lock);
+    file_allow_write(cur->exec_file);
+    file_close(cur->exec_file);
+    lock_release(&filesys_lock);
   }
 
   printf("%s: exit(%d)\n", cur->name, cur->linked_exit->exit_code);

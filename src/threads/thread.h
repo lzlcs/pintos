@@ -109,6 +109,7 @@ struct thread
 
     struct list file_list;
     uint32_t file_index;
+    struct file* exec_file;
 
 #endif
 
