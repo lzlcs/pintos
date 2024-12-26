@@ -340,7 +340,7 @@ thread_tid (void)
 
 void error_exit()
 {
-  thread_current()->exit_code = -1;
+  thread_current()->linked_exit->exit_code = -1;
   thread_exit();
 }
 /** Deschedules the current thread and destroys it.  Never
@@ -536,7 +536,6 @@ init_thread (struct thread *t, const char *name, int priority)
   t->magic = THREAD_MAGIC;
   t->wake_tick = -1;
 
-  t->exit_code = 0;
   list_init(&t->child_list);
   sema_init(&t->sema_wait, 0);
 

@@ -100,7 +100,6 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /**< Page directory. */
-    int32_t exit_code;
 
     struct list child_list;
     struct exit_info *linked_exit;

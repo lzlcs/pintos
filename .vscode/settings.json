@@ -1,8 +1,31 @@
 {
     "files.associations": {
+        "*.py": "python",
+        "*.cpp": "cpp",
         "tests.h": "c",
         "thread.h": "c",
         "debug.h": "c",
-        "flags.h": "c"
-    }
+        "flags.h": "c",
+        "typeinfo": "c",
+        "syscall-nr.h": "c",
+        "cstdlib": "c",
+        "*.inc": "c",
+        "*.tcc": "c",
+        "exception": "c",
+        "fstream": "c",
+        "iosfwd": "c",
+        "new": "c",
+        "ostream": "c",
+        "sstream": "c",
+        "streambuf": "c",
+        "syscall.h": "c",
+        "main.h": "c",
+        "lib.h": "c",
+        "array": "c",
+        "string_view": "c",
+        "algorithm": "cpp",
+        "istream": "cpp",
+        "utility": "cpp"
+    },
+    "C_Cpp.errorSquiggles": "disabled"
 }
